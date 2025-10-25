@@ -1,85 +1,228 @@
 import React, { useState } from "react";
-import axios from "axios";
-import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
+import { analyzePortfolioAPI, predictVolatilityAPI } from "./api";
 
-const API_BASE = "http://127.0.0.1:8000/api/v1";
-const COLORS = ["#2563EB", "#16A34A", "#F59E0B", "#EF4444", "#8B5CF6"];
+function App() {
+  // --- Portfolio form state ---
+  const [portfolio, setPortfolio] = useState([
+    { ticker: "AAPL", weight: 0.6 },
+    { ticker: "MSFT", weight: 0.4 },
+  ]);
+  const [period, setPeriod] = useState("6mo");
 
-export default function App() {
-  const [portfolio, setPortfolio] = useState([{ ticker: "AAPL", weight: 0.6 }, { ticker: "MSFT", weight: 0.4 }]);
-  const [result, setResult] = useState(null);
-  const [prediction, setPrediction] = useState(null);
+  // --- Result & error state ---
+  const [analysis, setAnalysis] = useState(null);
+  const [predictedVol, setPredictedVol] = useState(null);
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleChange = (i, field, v) => {
-    const cp = [...portfolio]; cp[i][field] = field === "weight" ? parseFloat(v) : v.toUpperCase(); setPortfolio(cp);
+  // --- Update ticker/weight values ---
+  const updateTicker = (index, key, value) => {
+    const updated = [...portfolio];
+    updated[index][key] = value;
+    setPortfolio(updated);
   };
 
-  const analyze = async () => {
+  // --- Add new ticker row ---
+  const addTicker = () => {
+    setPortfolio([...portfolio, { ticker: "", weight: 0 }]);
+  };
+
+  // --- Remove ticker row ---
+  const removeTicker = (index) => {
+    const updated = portfolio.filter((_, i) => i !== index);
+    setPortfolio(updated);
+  };
+
+  // --- Call backend: analyze portfolio ---
+  const onAnalyze = async (e) => {
+    e?.preventDefault();
+    setError("");
     setLoading(true);
     try {
-      const r = await axios.post(`${API_BASE}/analyze`, { portfolio });
-      setResult(r.data);
-      // call predict using latest return estimate and volatility (example)
-      const predicted = await axios.post(`${API_BASE}/predict-volatility`, {
-        return_value: 0.001, current_volatility: r.data.volatility
-      });
-      setPrediction(predicted.data.predicted_next_volatility);
-    } catch (e) {
-      alert("Error: " + (e.response?.data?.detail || e.message));
-    } finally { setLoading(false); }
+      const result = await analyzePortfolioAPI(portfolio, period);
+      setAnalysis(result);
+    } catch (err) {
+      console.error(err);
+      setError(
+        "❌ Failed to analyze portfolio: " +
+          (err.response?.data?.detail || err.message)
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const pieData = result ? portfolio.map((p, i) => ({ name: p.ticker, value: p.weight })) : [];
-  const barData = result ? Object.entries(result.latest_prices).map(([k,v]) => ({ ticker: k, price: v })) : [];
+  // --- Call backend: predict volatility example ---
+  const onPredictVol = async () => {
+    setError("");
+    setLoading(true);
+    try {
+      const res = await predictVolatilityAPI(0.012, 0.25); // Example values
+      setPredictedVol(res.predicted_next_volatility);
+    } catch (err) {
+      console.error(err);
+      setError(
+        "❌ Failed to predict volatility: " +
+          (err.response?.data?.detail || err.message)
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <div style={{ padding: 24 }}>
-      <h1>FinSight Dashboard</h1>
-      {portfolio.map((p, i) => (
-        <div key={i}>
-          <input value={p.ticker} onChange={e => handleChange(i, "ticker", e.target.value)} />
-          <input type="number" step="0.1" value={p.weight} onChange={e => handleChange(i, "weight", e.target.value)} />
-        </div>
-      ))}
-      <button onClick={analyze} disabled={loading}>Analyze Portfolio</button>
-      {loading && <div>Loading...</div>}
+    <div className="min-h-screen bg-gray-50 text-gray-900">
+      {/* --- Navbar --- */}
+      <nav className="bg-blue-700 text-white px-6 py-4 shadow-lg">
+        <h1 className="text-2xl font-bold">FinSight Dashboard</h1>
+      </nav>
 
-      {result && (
-        <div style={{ display: "flex", gap: 20, marginTop: 20 }}>
-          <div style={{ width: 300, height: 300 }}>
-            <h3>Weights</h3>
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={pieData} dataKey="value" nameKey="name" outerRadius={80} fill="#8884d8" label>
-                  {pieData.map((entry, idx) => <Cell key={idx} fill={COLORS[idx % COLORS.length]} />)}
-                </Pie>
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
+      <main className="p-8 max-w-5xl mx-auto">
+        {/* --- Portfolio Form --- */}
+        <section className="bg-white rounded-xl shadow p-6 mb-8">
+          <h2 className="text-xl font-semibold mb-4">Enter Portfolio</h2>
+          <form onSubmit={onAnalyze}>
+            {portfolio.map((p, index) => (
+              <div
+                key={index}
+                className="flex items-center gap-4 mb-3 border-b border-gray-200 pb-2"
+              >
+                <input
+                  type="text"
+                  placeholder="Ticker (e.g., AAPL)"
+                  value={p.ticker}
+                  onChange={(e) =>
+                    updateTicker(index, "ticker", e.target.value.toUpperCase())
+                  }
+                  className="border rounded px-3 py-2 w-1/3"
+                  required
+                />
+                <input
+                  type="number"
+                  step="0.01"
+                  placeholder="Weight"
+                  value={p.weight}
+                  onChange={(e) =>
+                    updateTicker(index, "weight", e.target.value)
+                  }
+                  className="border rounded px-3 py-2 w-1/3"
+                  required
+                />
+                {portfolio.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => removeTicker(index)}
+                    className="text-red-600 hover:underline"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+            ))}
 
-          <div style={{ width: 400, height: 300 }}>
-            <h3>Latest Prices</h3>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={barData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="ticker" />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="price" fill="#2563EB" />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+            <div className="flex items-center gap-3 mt-4">
+              <button
+                type="button"
+                onClick={addTicker}
+                className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300"
+              >
+                + Add Ticker
+              </button>
 
-          <div style={{ minWidth: 240 }}>
-            <h3>Metrics</h3>
-            <div>Expected Return: {result.expected_return}</div>
-            <div>Volatility: {result.volatility}</div>
-            <div>Sharpe: {result.sharpe_ratio}</div>
-            <div style={{ marginTop: 12 }}>Predicted next volatility: {prediction}</div>
+              <button
+                type="submit"
+                disabled={loading}
+                className="px-5 py-2 bg-blue-600 text-white font-semibold rounded hover:bg-blue-700"
+              >
+                {loading ? "Analyzing..." : "Analyze Portfolio"}
+              </button>
+
+              <select
+                value={period}
+                onChange={(e) => setPeriod(e.target.value)}
+                className="ml-auto border rounded px-3 py-2"
+              >
+                <option value="3mo">3 Months</option>
+                <option value="6mo">6 Months</option>
+                <option value="1y">1 Year</option>
+              </select>
+            </div>
+          </form>
+        </section>
+
+        {/* --- Analysis Results --- */}
+        {analysis && (
+          <section className="bg-white rounded-xl shadow p-6 mb-8">
+            <h2 className="text-xl font-semibold mb-4">
+              Portfolio Analysis Results
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="p-4 bg-blue-50 rounded-lg">
+                <p className="text-sm text-gray-500">Expected Return</p>
+                <p className="text-xl font-bold text-blue-700">
+                  {(analysis.expected_return * 100).toFixed(2)}%
+                </p>
+              </div>
+
+              <div className="p-4 bg-green-50 rounded-lg">
+                <p className="text-sm text-gray-500">Volatility</p>
+                <p className="text-xl font-bold text-green-700">
+                  {(analysis.volatility * 100).toFixed(2)}%
+                </p>
+              </div>
+
+              <div className="p-4 bg-purple-50 rounded-lg">
+                <p className="text-sm text-gray-500">Sharpe Ratio</p>
+                <p className="text-xl font-bold text-purple-700">
+                  {analysis.sharpe_ratio}
+                </p>
+              </div>
+            </div>
+
+            <h3 className="mt-6 text-lg font-semibold">Latest Prices</h3>
+            <ul className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {Object.entries(analysis.latest_prices).map(([ticker, price]) => (
+                <li
+                  key={ticker}
+                  className="border rounded-lg p-3 bg-gray-50 text-center"
+                >
+                  <span className="font-semibold">{ticker}</span>: $
+                  {price.toFixed(2)}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {/* --- Volatility Prediction --- */}
+        <section className="bg-white rounded-xl shadow p-6">
+          <h2 className="text-xl font-semibold mb-4">Predict Volatility</h2>
+          <button
+            onClick={onPredictVol}
+            disabled={loading}
+            className="px-5 py-2 bg-green-600 text-white font-semibold rounded hover:bg-green-700"
+          >
+            {loading ? "Predicting..." : "Run Example Prediction"}
+          </button>
+          {predictedVol && (
+            <p className="mt-4 text-lg">
+              📈 Predicted Next Volatility:{" "}
+              <span className="font-semibold text-green-700">
+                {predictedVol.toFixed(6)}
+              </span>
+            </p>
+          )}
+        </section>
+
+        {/* --- Error Message --- */}
+        {error && (
+          <div className="mt-6 bg-red-100 border border-red-300 text-red-700 p-4 rounded">
+            {error}
           </div>
-        </div>
-      )}
+        )}
+      </main>
     </div>
   );
 }
+
+export default App;
