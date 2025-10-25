@@ -1,0 +1,25 @@
+version: "3.8"
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: finsight_backend/Dockerfile
+    container_name: finsight_backend
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./finsight_frontend      # <— updated context
+      dockerfile: Dockerfile.frontend   # <— relative to this folder
+    container_name: finsight_frontend
+    ports:
+      - "5173:80"
+    environment:
+      - VITE_API_BASE=http://backend:8000/api/v1
+    depends_on:
+      - backend
+    restart: unless-stopped
+

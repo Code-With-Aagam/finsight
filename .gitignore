@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.sqlite3
+env/
+venv/
+
+# Node / React / Vite
+node_modules/
+dist/
+*.log
+
+# Docker
+*.pid
+*.db
+*.sock
+
+# System
+.DS_Store
+Thumbs.db
+
+# VS Code / IDEs
+.vscode/
+.idea/
