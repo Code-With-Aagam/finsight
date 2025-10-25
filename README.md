@@ -168,7 +168,7 @@ Contributions are always welcome! 🎉
 
 🔗 **Links:**  
 - [GitHub](https://github.com/Code-With-Aagam)  
-- [LinkedIn](https://www.linkedin.com/in/aagam-shah)  
+- [LinkedIn](https://www.linkedin.com/in/aagam-shah-3ab765203/)  
 
 ---
 
